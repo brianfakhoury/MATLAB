@@ -10,7 +10,7 @@ function produce_set(tagged_flag)
     
     fprintf("Creating %s \n", filename);
     file = input('Name of data file-->', 's');
-    fid = fopen(['./data/' file '.asc']);
+    fid = fopen(['./data/' file '.txt']);
     
     disp("Parsing and cleaning.........");
     while true
