@@ -1,14 +1,67 @@
 function [FCNHNDL] = eyegame(varargin)
     %MATLABTETRIS A MATLAB version of the classic game Tetris.
     % Patch refers to one of the brick pieces
-    rng('shuffle');
-    f_clr = [.341 .717 .42]; %Figure color.
-    S.fig = figure('units','pixels','name','Tetris','menubar','none','visible','off','numbertitle','off','position',[200 100 650 720],'color',f_clr,'keypressfcn',@fig_kpfcn2,'closereq',@fig_clsrqfcn,'busyaction','cancel','renderer','opengl','windowbuttondownfcn',@fig_wbdfcn,'resizefcn',@fig_rszfcn);
-    S.tmr = timer('Name','Tetris_timer','Period',1,'StartDelay',1,'TasksToExecute',50,'ExecutionMode','fixedrate','TimerFcn',@game_step); % Game ticker
-    S.axs = axes('units','pix','position',[145 60 360 630],'ycolor',f_clr,'xcolor',f_clr, 'xtick',[],'ytick',[],'xlim',[-1 11],'ylim',[-1 20],'color',f_clr,'visible','off'); % The main board
+    rng('shuffle'); % This sets the internal seed generator, will need later.
+    f_clr = [.341 .717 .42];  % Figure background color
+    % Game window
+    S.fig = figure(...
+        'units','pixels',...
+        'name','Tetris',...
+        'menubar','none',...
+        'visible','off',...
+        'numbertitle','off',...
+        'position',[200 100 650 720],... % When the window opens, these specify coordinates realtive
+        ...                              % to the bottom left corner [x,y,width,height]
+        'color',f_clr,... %
+        ... % these settings bind our custom event functions
+        'keypressfcn',@fig_kpfcn2,...
+        'closereq',@fig_clsrqfcn,...
+        'busyaction','cancel',...
+        'windowbuttondownfcn', @fig_wbdfcn,...
+        'resizefcn', @fig_rszfcn,...
+        'renderer','opengl'... % This uses extra gpu resources if available
+    );
+    % Game tick
+    S.tmr = timer(...
+        'Name','Tetris_timer',...
+        'Period',1,...
+        'StartDelay',1,...
+        'TasksToExecute',50,...
+        'ExecutionMode','fixedrate',...
+        'TimerFcn',@game_step...
+    );
+    % The main board
+    S.axs = axes(...
+        'units','pix',...
+        'position',[145 60 360 630],...
+        'ycolor',f_clr,...
+        'xcolor',f_clr,...
+        'xtick',[],...
+        'ytick',[],...
+        'xlim',[-1 11],...
+        'ylim',[-1 20],...
+        'color',f_clr,...
+        'visible','off'...
+    );
     % Template positions for the patch objects (bricks) in both axes.
-    X = [0 .2 0;.2 .8 .2;.2 .8 .8;.8 .2 .8;1 .2 1;0 .2 1;0 .2 0];
-    Y = [0 .2 0;.2 .2 .2;.8 .8 .2;.8 .8 .8;1 .2 1;1 .2 0;0 .2 0];
+    X = [
+        0.0, 0.2, 0.0;
+        0.2, 0.8, 0.2;
+        0.2, 0.8, 0.8;
+        0.8, 0.2, 0.8;
+        1.0, 0.2, 1.0;
+        0.0, 0.2, 1.0;
+        0.0, 0.2, 0.0
+    ];
+    Y = [
+        0.0, 0.2, 0.0;
+        0.2, 0.2, 0.2;
+        0.8, 0.8, 0.2;
+        0.8, 0.8, 0.8;
+        1.0, 0.2, 1.0;
+        1.0, 0.2, 0.0;
+        0.0, 0.2, 0.0
+    ];
     g1 = repmat([.9 .65 .4],[1,1,3]); % Grey color used throughout.
     % Make the board boarders.
     for jj = [-1 10]
@@ -21,7 +74,7 @@ function [FCNHNDL] = eyegame(varargin)
         patch(X+ii,Y-1,g1,'edgecolor','none','handlevis','callback')
     end
 
-    % Patch handles
+    % Patch color handles
     S.pch = zeros(10,20);
 
     for jj = 0:19 % Make the board squares.
@@ -63,6 +116,8 @@ function [FCNHNDL] = eyegame(varargin)
     S.LVLFAC = .750;  % Percent of previous timerdelay. 
     S.CHGLVL = 3; % Increment level every S.CHGLVL lines.
     
+    S.SETBLK = @set_blocks; % allow public broadcasting of board state
+    
     set(S.fig, 'visible','on');
 
     if nargin && isnumeric(varargin{1})
@@ -73,6 +128,8 @@ function [FCNHNDL] = eyegame(varargin)
         val = S.(varargin{1});
     end
     FCNHNDL = @get_game_memory;
+    
+    pbt_call;
         
     
     function [] = make_preview(varargin)
@@ -93,8 +150,6 @@ function [FCNHNDL] = eyegame(varargin)
         S.CURLNS = 0; % New Game -> start at zero.
         S.CURLVL = S.PLRLVL; % Set the level to players choice.
         S.CURSCR = 0; % New Game -> start at zero.
-        play_tet; % Initiate Gameplay.
-
     end
 
 
@@ -121,7 +176,7 @@ function [FCNHNDL] = eyegame(varargin)
 
 
     function [] = game_step(varargin)
-    % Timerfcn, advances the current piece down the board
+        % Timerfcn, advances the current piece down the board
         S.tick = S.tick + 1;
         if S.STPTMR && nargin  % Only timer calls with args...
             return  % So that timer can't interrupt FIG_KPFCN!
@@ -200,8 +255,10 @@ function [FCNHNDL] = eyegame(varargin)
                 end
 
                 turner(row,col,arg);  % Turn the piece.
-            case 'n'
+            case 'q'
                 quit_check;  % User might want to quit the game.
+            case 'n'
+                restart_game;
             otherwise
         end
 
@@ -213,14 +270,19 @@ function [FCNHNDL] = eyegame(varargin)
     % Callback handles the case when 's' or 'p' is pressed if 
     % the game is paused or at game start.
         if strcmp(varargin{2}.Key,'s')
-            pbt_call;  % User wants to start a game.
+            play_tet; % Initiate Gameplay.
+
         end
         if strcmp(varargin{2}.Key,'p')
             pbt_call;  % User wants to pause/unpause.
         end
 
-        if strcmp(varargin{2}.Key,'n')
+        if strcmp(varargin{2}.Key,'q')
             quit_check;  % Perhaps user wants to quit.
+        end
+            
+        if strcmp(varargin{2}.Key,'n')
+            restart_game;  % Perhaps user wants to restart.
         end
     end
 
@@ -246,7 +308,7 @@ function [FCNHNDL] = eyegame(varargin)
                 if any(col>19) || all(col<=2)
                     return
                 else
-                    if S.CURROT == 1;
+                    if S.CURROT == 1
                         r = [row(2),row(2),row(2),row(2)];
                         c = [col(2)-2,col(2)-1,col(2),col(2)+1];
                         S.CURROT = 2;
@@ -527,12 +589,37 @@ function [FCNHNDL] = eyegame(varargin)
 
     function [] = quit_check()
     % Creates a dialog box to check if the user wants to quit.
-        QG = questdlg('Are you sure you want to start over?',...
-                      'End current game?', ...
-                      'Yes', 'No', 'Yes');
+        QG = questdlg('End current game?','Yes', 'No');
         if strcmp(QG,'Yes')
             clean_tet;
+            close(S.fig);
         end
     end
 
+    function [] = restart_game()
+    % reset game and gameboard
+        QG = questdlg('Restart game?','Yes', 'No');
+        if strcmp(QG,'Yes')
+            clean_tet;
+            pbt_call;
+            set(S.fig,'keypressfcn',@fig_kpfcn2)
+        end
+    end
+
+    function [] = set_blocks(BRD)
+        % Set specific blocks to design board
+        if isequal(size(BRD), size(S.BRDMAT)) || (isvector(BRD) && isvector(S.BRDMAT) && numel(BRD) == numel(S.BRDMAT))
+            brdsize = size(BRD);
+            for x=1:brdsize(1)
+                for y=1:brdsize(2)
+                    S.BRDMAT(x,y) = BRD(x,y);
+                    if BRD(x,y)>0
+                        set(S.pch(x,y),'facecol','b','edgecol','g');
+                    end
+                end
+            end
+            
+        end
+    end
+        
 end
